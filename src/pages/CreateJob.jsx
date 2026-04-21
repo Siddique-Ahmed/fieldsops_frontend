@@ -59,7 +59,13 @@ export const CreateJob = () => {
         return;
       }
 
-      await jobAPI.createJob(formData);
+      // Filter out empty technicianId for optional assignment
+      const jobData = {
+        ...formData,
+        technicianId: formData.technicianId || null,
+      };
+
+      await jobAPI.createJob(jobData);
       toast.success("Job created successfully!");
       navigate("/dashboard");
     } catch (err) {

@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_BASE_URL || "/api";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -38,7 +38,7 @@ apiClient.interceptors.response.use(
 
       try {
         const response = await axios.post(
-          `${API_BASE_URL}/auth/refresh-token`,
+          "/api/auth/refresh-token",
           {},
           { withCredentials: true },
         );
@@ -86,18 +86,41 @@ export const userAPI = {
 };
 
 export const jobAPI = {
+  // Job CRUD
   createJob: (data) => apiClient.post("/jobs", data),
-  getAllJobs: () => apiClient.get("/jobs"),
+  getAllJobs: (params) => apiClient.get("/jobs", { params }),
   getJobById: (id) => apiClient.get(`/jobs/${id}`),
-  getClientJobs: (clientId) => apiClient.get(`/jobs/client/${clientId}`),
-  getTechnicianJobs: (technicianId) =>
-    apiClient.get(`/jobs/technician/${technicianId}`),
-  assignTechnician: (data) => apiClient.post("/jobs/assign", data),
-  updateJobStatus: (jobId, status) =>
-    apiClient.patch(`/jobs/${jobId}/status`, { status }),
-  addNote: (jobId, text) => apiClient.post(`/jobs/${jobId}/notes`, { text }),
   updateJob: (jobId, data) => apiClient.put(`/jobs/${jobId}`, data),
   deleteJob: (jobId) => apiClient.delete(`/jobs/${jobId}`),
+
+  // Job filtering by role
+  getClientJobs: (clientId, params) =>
+    apiClient.get(`/jobs/client/${clientId}`, { params }),
+  getTechnicianJobs: (technicianId, params) =>
+    apiClient.get(`/jobs/technician/${technicianId}`, { params }),
+
+  // Job assignment
+  assignTechnician: (jobId, technicianId) =>
+    apiClient.patch(`/jobs/${jobId}/assign`, { technicianId }),
+  reassignTechnician: (jobId, newTechnicianId, reason, reassignmentType) =>
+    apiClient.patch(`/jobs/${jobId}/reassign`, {
+      newTechnicianId,
+      reason,
+      reassignmentType,
+    }),
+
+  // Job status
+  updateJobStatus: (jobId, status) =>
+    apiClient.patch(`/jobs/${jobId}/status`, { status }),
+
+  // Job notes
+  addNote: (jobId, text, role) =>
+    apiClient.post(`/jobs/${jobId}/notes`, { text, role }),
+
+  // Job history & audit trail
+  getJobHistory: (jobId) => apiClient.get(`/jobs/${jobId}/history`),
+  getAssignmentHistory: (jobId) =>
+    apiClient.get(`/jobs/${jobId}/assignment-history`),
 };
 
 export default apiClient;

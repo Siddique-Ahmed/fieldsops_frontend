@@ -3,10 +3,20 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { jobAPI, userAPI } from "../services/api";
 import DashboardLayout from "../components/DashboardLayout";
-import { ArrowLeft, Save, Send, Trash2 } from "lucide-react";
+import JobHistory from "../components/JobHistory";
+import AssignmentHistory from "../components/AssignmentHistory";
+import ReassignTechnicianModal from "../components/ReassignTechnicianModal";
+import {
+  ArrowLeft,
+  Save,
+  Send,
+  Trash2,
+  Users,
+  History,
+} from "lucide-react";
 import { toast } from "react-toastify";
 
-export const JobDetails = () => {
+const JobDetails = () => {
   const { user } = useAuth();
   const { jobId } = useParams();
   const navigate = useNavigate();
@@ -14,18 +24,33 @@ export const JobDetails = () => {
   const [job, setJob] = useState(null);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState("");
   const [newStatus, setNewStatus] = useState("");
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [activeTab, setActiveTab] = useState("info"); // info, history, assignments
+
+  // ✅ FIX: Always re-fetch the latest job from DB after any mutation
+  const refreshJob = async () => {
+    try {
+      const jobResponse = await jobAPI.getJobById(jobId);
+      const latest = jobResponse.data.data;
+      setJob(latest);
+      setNewStatus(latest.status);
+    } catch (err) {
+      console.error("Failed to refresh job:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         const jobResponse = await jobAPI.getJobById(jobId);
-        setJob(jobResponse.data.data);
-        setNewStatus(jobResponse.data.data.status);
+        const latestJob = jobResponse.data.data;
+        setJob(latestJob);
+        setNewStatus(latestJob.status);
 
-        // ✅ FIX: Only fetch technicians list if user is admin
         if (user?.role === "admin") {
           const techResponse = await userAPI.getTechnicians();
           setTechnicians(techResponse.data.data || []);
@@ -46,35 +71,38 @@ export const JobDetails = () => {
       toast.warn("Please enter a note before submitting");
       return;
     }
-
     try {
-      const response = await jobAPI.addNote(jobId, noteText);
-      setJob(response.data.data);
+      await jobAPI.addNote(jobId, noteText, user?.role);
       setNoteText("");
       toast.success("Note added!");
+      await refreshJob(); // ✅ re-sync with DB
     } catch (err) {
-      toast.error("Failed to add note");
+      toast.error(err.response?.data?.message || "Failed to add note");
     }
   };
 
   const handleStatusChange = async () => {
     try {
-      const response = await jobAPI.updateJobStatus(jobId, newStatus);
-      setJob(response.data.data);
+      await jobAPI.updateJobStatus(jobId, newStatus);
       toast.success(`Status updated to "${newStatus}"`);
+      await refreshJob(); // ✅ re-sync with DB
     } catch (err) {
-      toast.error("Failed to update status");
+      toast.error(err.response?.data?.message || "Failed to update status");
     }
   };
 
   const handleAssignTechnician = async (technicianId) => {
     try {
-      const response = await jobAPI.assignTechnician({ jobId, technicianId });
-      setJob(response.data.data);
+      await jobAPI.assignTechnician(jobId, technicianId);
       toast.success("Technician assigned successfully!");
+      await refreshJob(); // ✅ re-sync with DB — shows Reassign panel immediately
     } catch (err) {
-      toast.error("Failed to assign technician");
+      toast.error(err.response?.data?.message || "Failed to assign technician");
     }
+  };
+
+  const handleReassignSuccess = async () => {
+    await refreshJob(); // ✅ re-sync with DB after reassign
   };
 
   const handleDeleteJob = async () => {
@@ -82,9 +110,9 @@ export const JobDetails = () => {
       try {
         await jobAPI.deleteJob(jobId);
         toast.success("Job deleted");
-        navigate("/");
+        navigate("/dashboard");
       } catch (err) {
-        toast.error("Failed to delete job");
+        toast.error(err.response?.data?.message || "Failed to delete job");
       }
     }
   };
@@ -135,12 +163,11 @@ export const JobDetails = () => {
 
   return (
     <DashboardLayout>
-
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="p-2 hover:bg-gray-200 rounded-lg transition"
           >
             <ArrowLeft className="w-6 h-6 text-gray-600" />
@@ -162,196 +189,281 @@ export const JobDetails = () => {
             </button>
           )}
         </div>
-          
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Job Info Card */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Job Information
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">
-                    Description
-                  </p>
-                  <p className="text-gray-900 mt-1">{job.description}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">Client</p>
-                    <p className="text-gray-900 mt-1">
-                      {/* ✅ FIX: clientId refs Client model which has companyName */}
-                      {job.clientId?.companyName || job.clientId?.userId?.name || "Unknown"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">
-                      Priority
-                    </p>
-                    <p className="text-gray-900 mt-1 capitalize">
-                      {job.priority}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">
-                      Scheduled Date
-                    </p>
-                    <p className="text-gray-900 mt-1">
-                      {new Date(job.scheduledAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">
-                      Assigned Technician
-                    </p>
-                    <p className="text-gray-900 mt-1">
-                      {/* ✅ FIX: technicianId refs Technician model, access nested userId */}
-                      {job.technicianId?.userId?.name || "Not assigned"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Status & Assignment */}
-            {(user?.role === "admin" || user?.role === "technician") && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  Update Status
-                </h2>
-                <div className="flex gap-2 mb-4">
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    {statusOptions.map((status) => (
-                      <option key={status} value={status}>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={handleStatusChange}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
-                  >
-                    <Save className="w-4 h-4" />
-                    Update
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Assign Technician */}
-            {user?.role === "admin" && !job.technicianId && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  Assign Technician
-                </h2>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {technicians.map((tech) => (
-                    <button
-                      key={tech._id}
-                      onClick={() => handleAssignTechnician(tech._id)}
-                      className="w-full p-3 text-left border border-gray-200 hover:border-blue-500 hover:bg-blue-50 rounded-lg transition"
-                    >
-                      <p className="font-medium">{tech.userId?.name}</p>
-                      <p className="text-sm text-gray-600">
-                        Skills: {tech.skillSet?.join(", ") || "General"}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Notes Section */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
-
-              {/* Add Note Form */}
-              <div className="mb-6 flex gap-2">
-                <textarea
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  placeholder="Add a note..."
-                  rows="3"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                />
-                <button
-                  onClick={handleAddNote}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2 h-fit"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Notes List */}
-              <div className="space-y-4">
-                {job.notes?.length === 0 ? (
-                  <p className="text-gray-600 text-center py-8">No notes yet</p>
-                ) : (
-                  job.notes?.map((note) => (
-                    <div
-                      key={note._id}
-                      className="p-4 bg-gray-50 rounded-lg border border-gray-200"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-gray-900">{note.text}</p>
-                          <p className="text-sm text-gray-600 mt-2">
-                            {/* ✅ FIX: note.addedBy is populated User, fallback to stored userName */}
-                            By: {note.addedBy?.name || note.userName || "Unknown"} at{" "}
-                            {new Date(note.createdAt).toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="bg-white rounded-lg shadow p-6 h-fit">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Summary</h2>
-            <div className="space-y-4 text-sm">
-              <div>
-                <p className="text-gray-600 font-medium">Status</p>
-                <p
-                  className={`mt-1 inline-block px-3 py-1 rounded-full text-xs font-medium ${statusColors[job.status]}`}
-                >
-                  {job.status}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-600 font-medium">Priority</p>
-                <p className="mt-1 text-gray-900 capitalize">{job.priority}</p>
-              </div>
-              {/* Client Contact */}
-              <div>
-                <p className="text-gray-600 font-medium">Client Contact</p>
-                {/* ✅ FIX: clientId refs Client model which has phone */}
-                <p className="mt-1 text-gray-900">
-                  {job.clientId?.phone || job.clientId?.userId?.email || "N/A"}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-600 font-medium">Total Notes</p>
-                <p className="mt-1 text-gray-900">{job.notes?.length || 0}</p>
-              </div>
-              <div>
-                <p className="text-gray-600 font-medium">Created</p>
-                <p className="mt-1 text-gray-900 text-xs">
-                  {new Date(job.createdAt).toLocaleString()}
-                </p>
-              </div>
-            </div>
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-lg shadow mb-6 border-b border-gray-200">
+          <div className="flex gap-1 p-1">
+            <button
+              onClick={() => setActiveTab("info")}
+              className={`flex-1 py-3 px-4 text-center font-medium transition rounded-t-lg ${
+                activeTab === "info"
+                  ? "bg-blue-50 text-blue-700 border-b-2 border-blue-600"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Job Information
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`flex-1 py-3 px-4 text-center font-medium transition rounded-t-lg flex items-center justify-center gap-2 ${
+                activeTab === "history"
+                  ? "bg-blue-50 text-blue-700 border-b-2 border-blue-600"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <History className="w-4 h-4" />
+              History
+            </button>
+            <button
+              onClick={() => setActiveTab("assignments")}
+              className={`flex-1 py-3 px-4 text-center font-medium transition rounded-t-lg flex items-center justify-center gap-2 ${
+                activeTab === "assignments"
+                  ? "bg-blue-50 text-blue-700 border-b-2 border-blue-600"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Assignments
+            </button>
           </div>
         </div>
+
+        {/* Info Tab */}
+        {activeTab === "info" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              {/* Job Info Card */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                  Job Information
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-gray-600 text-sm font-medium">
+                      Description
+                    </p>
+                    <p className="text-gray-900 mt-1">{job.description}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">
+                        Client
+                      </p>
+                      <p className="text-gray-900 mt-1">
+                        {job.clientId?.companyName ||
+                          job.clientId?.userId?.name ||
+                          "Unknown"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">
+                        Priority
+                      </p>
+                      <p className="text-gray-900 mt-1 capitalize">
+                        {job.priority}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">
+                        Scheduled Date
+                      </p>
+                      <p className="text-gray-900 mt-1">
+                        {new Date(job.scheduledAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">
+                        Assigned Technician
+                      </p>
+                      <p className="text-gray-900 mt-1">
+                        {job.technicianId?.userId?.name || "Not assigned"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Update */}
+              {(user?.role === "admin" || user?.role === "technician") && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">
+                    Update Status
+                  </h2>
+                  <div className="flex gap-2">
+                    <select
+                      value={newStatus}
+                      onChange={(e) => setNewStatus(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleStatusChange}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      Update
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Assign Initial Technician */}
+              {user?.role === "admin" && !job.technicianId && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">
+                    Assign Technician
+                  </h2>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {technicians.map((tech) => (
+                      <button
+                        key={tech._id}
+                        onClick={() => handleAssignTechnician(tech._id)}
+                        className="w-full p-3 text-left border border-gray-200 hover:border-blue-500 hover:bg-blue-50 rounded-lg transition"
+                      >
+                        <p className="font-medium">{tech.userId?.name}</p>
+                        <p className="text-sm text-gray-600">
+                          Skills: {tech.skillSet?.join(", ") || "General"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Reassign Technician */}
+              {user?.role === "admin" && job.technicianId && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold text-blue-900">
+                        Currently Assigned: {job.technicianId?.userId?.name}
+                      </h3>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Need to reassign? Use the button to find a replacement.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowReassignModal(true)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
+                    >
+                      <Users className="w-4 h-4" />
+                      Reassign
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
+                <div className="mb-6 flex gap-2">
+                  <textarea
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    placeholder="Add a note..."
+                    rows="3"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                  <button
+                    onClick={handleAddNote}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2 h-fit"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {job.notes?.length === 0 ? (
+                    <p className="text-gray-600 text-center py-8">
+                      No notes yet
+                    </p>
+                  ) : (
+                    job.notes?.map((note) => (
+                      <div
+                        key={note._id}
+                        className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+                      >
+                        <p className="text-gray-900">{note.text}</p>
+                        <p className="text-sm text-gray-600 mt-2">
+                          By: {note.addedBy?.name || note.userName || "Unknown"}
+                          {note.role && ` (${note.role})`} at{" "}
+                          {new Date(note.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar */}
+            <div className="bg-white rounded-lg shadow p-6 h-fit">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Summary</h2>
+              <div className="space-y-4 text-sm">
+                <div>
+                  <p className="text-gray-600 font-medium">Status</p>
+                  <p
+                    className={`mt-1 inline-block px-3 py-1 rounded-full text-xs font-medium ${statusColors[job.status]}`}
+                  >
+                    {job.status}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-600 font-medium">Priority</p>
+                  <p className="mt-1 text-gray-900 capitalize">
+                    {job.priority}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-600 font-medium">Client Contact</p>
+                  <p className="mt-1 text-gray-900 text-xs">
+                    {job.clientId?.phone ||
+                      job.clientId?.userId?.email ||
+                      "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-600 font-medium">Total Notes</p>
+                  <p className="mt-1 text-gray-900">{job.notes?.length || 0}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600 font-medium">Created</p>
+                  <p className="mt-1 text-gray-900 text-xs">
+                    {new Date(job.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === "history" && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <JobHistory jobId={jobId} />
+          </div>
+        )}
+
+        {/* Assignments Tab */}
+        {activeTab === "assignments" && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <AssignmentHistory jobId={jobId} />
+          </div>
+        )}
+
+        {/* Reassign Modal */}
+        <ReassignTechnicianModal
+          isOpen={showReassignModal}
+          onClose={() => setShowReassignModal(false)}
+          jobId={jobId}
+          currentTechnicianId={job.technicianId?._id}
+          currentTechnicianName={job.technicianId?.userId?.name}
+          onReassignSuccess={handleReassignSuccess}
+        />
       </div>
     </DashboardLayout>
   );
