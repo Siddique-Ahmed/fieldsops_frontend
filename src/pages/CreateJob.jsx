@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { jobAPI, userAPI } from "../services/api";
 import DashboardLayout from "../components/DashboardLayout";
-import { ArrowLeft, Save, AlertCircle } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
+import { toast } from "react-toastify";
 
 export const CreateJob = () => {
   const { user } = useAuth();
@@ -11,7 +12,6 @@ export const CreateJob = () => {
   const [clients, setClients] = useState([]);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
     title: "",
@@ -45,7 +45,6 @@ export const CreateJob = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
@@ -55,15 +54,16 @@ export const CreateJob = () => {
         !formData.clientId ||
         !formData.scheduledAt
       ) {
-        setError("Please fill in all required fields");
+        toast.warn("Please fill in all required fields");
         setLoading(false);
         return;
       }
 
       await jobAPI.createJob(formData);
+      toast.success("Job created successfully!");
       navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create job");
+      toast.error(err.response?.data?.message || "Failed to create job");
     } finally {
       setLoading(false);
     }
@@ -87,14 +87,6 @@ export const CreateJob = () => {
             </p>
           </div>
         </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="text-red-800">{error}</div>
-          </div>
-        )}
 
         {/* Form Card */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">

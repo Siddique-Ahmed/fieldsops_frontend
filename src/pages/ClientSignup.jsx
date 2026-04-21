@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../services/api";
+import { toast } from "react-toastify";
 
 export default function ClientSignup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [companyLoading, setCompanyLoading] = useState(true);
   const token = searchParams.get("token");
   const emailFromToken = searchParams.get("email");
@@ -45,7 +45,7 @@ export default function ClientSignup() {
           }));
         }
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to verify invitation");
+        toast.error(err.response?.data?.message || "Failed to verify invitation");
       } finally {
         setCompanyLoading(false);
       }
@@ -60,34 +60,26 @@ export default function ClientSignup() {
       ...prev,
       [name]: value,
     }));
-    setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
-    // Validation
-    if (
-      !formData.email ||
-      !formData.password ||
-      !formData.name ||
-      !formData.phone
-    ) {
-      setError("All fields are required");
+    if (!formData.email || !formData.password || !formData.name || !formData.phone) {
+      toast.warn("All fields are required");
       setLoading(false);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      toast.error("Passwords do not match");
       setLoading(false);
       return;
     }
 
     if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
+      toast.warn("Password must be at least 6 characters");
       setLoading(false);
       return;
     }
@@ -104,10 +96,11 @@ export default function ClientSignup() {
       });
 
       if (response.data.success) {
-        navigate("/auth/login");
+        toast.success("Account created! You can now login.");
+        navigate("/login");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed");
+      toast.error(err.response?.data?.message || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -131,12 +124,6 @@ export default function ClientSignup() {
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Client Signup</h1>
         <p className="text-gray-600 mb-6">Create your account</p>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
 
         {companyLoading ? (
           <div className="text-center py-8">

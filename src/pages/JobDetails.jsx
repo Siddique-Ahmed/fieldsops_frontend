@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { jobAPI, userAPI } from "../services/api";
-import Navbar from "../components/Navbar";
-import { ArrowLeft, Save, Send, AlertCircle, Trash2 } from "lucide-react";
+import DashboardLayout from "../components/DashboardLayout";
+import { ArrowLeft, Save, Send, Trash2 } from "lucide-react";
+import { toast } from "react-toastify";
 
 export const JobDetails = () => {
   const { user } = useAuth();
@@ -13,7 +14,6 @@ export const JobDetails = () => {
   const [job, setJob] = useState(null);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [noteText, setNoteText] = useState("");
   const [newStatus, setNewStatus] = useState("");
 
@@ -25,8 +25,11 @@ export const JobDetails = () => {
         setJob(jobResponse.data.data);
         setNewStatus(jobResponse.data.data.status);
 
-        const techResponse = await userAPI.getTechnicians();
-        setTechnicians(techResponse.data.data || []);
+        // ✅ FIX: Only fetch technicians list if user is admin
+        if (user?.role === "admin") {
+          const techResponse = await userAPI.getTechnicians();
+          setTechnicians(techResponse.data.data || []);
+        }
       } catch (err) {
         setError("Failed to load job details");
         console.error(err);
@@ -36,17 +39,21 @@ export const JobDetails = () => {
     };
 
     fetchData();
-  }, [jobId]);
+  }, [jobId, user?.role]);
 
   const handleAddNote = async () => {
-    if (!noteText.trim()) return;
+    if (!noteText.trim()) {
+      toast.warn("Please enter a note before submitting");
+      return;
+    }
 
     try {
       const response = await jobAPI.addNote(jobId, noteText);
       setJob(response.data.data);
       setNoteText("");
+      toast.success("Note added!");
     } catch (err) {
-      setError("Failed to add note");
+      toast.error("Failed to add note");
     }
   };
 
@@ -54,20 +61,19 @@ export const JobDetails = () => {
     try {
       const response = await jobAPI.updateJobStatus(jobId, newStatus);
       setJob(response.data.data);
+      toast.success(`Status updated to "${newStatus}"`);
     } catch (err) {
-      setError("Failed to update status");
+      toast.error("Failed to update status");
     }
   };
 
   const handleAssignTechnician = async (technicianId) => {
     try {
-      const response = await jobAPI.assignTechnician({
-        jobId,
-        technicianId,
-      });
+      const response = await jobAPI.assignTechnician({ jobId, technicianId });
       setJob(response.data.data);
+      toast.success("Technician assigned successfully!");
     } catch (err) {
-      setError("Failed to assign technician");
+      toast.error("Failed to assign technician");
     }
   };
 
@@ -75,35 +81,40 @@ export const JobDetails = () => {
     if (window.confirm("Are you sure you want to delete this job?")) {
       try {
         await jobAPI.deleteJob(jobId);
+        toast.success("Job deleted");
         navigate("/");
       } catch (err) {
-        setError("Failed to delete job");
+        toast.error("Failed to delete job");
       }
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="flex items-center justify-center min-h-[calc(100vh-64px)]">
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading job details...</p>
           </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (!job) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="text-center text-gray-600">Job not found</div>
+      <DashboardLayout>
+        <div className="text-center py-20 text-gray-500">
+          <p className="text-lg font-medium">Job not found</p>
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="mt-4 text-blue-600 hover:underline text-sm"
+          >
+            ← Back to Dashboard
+          </button>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
@@ -123,10 +134,9 @@ export const JobDetails = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <DashboardLayout>
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
@@ -152,15 +162,7 @@ export const JobDetails = () => {
             </button>
           )}
         </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="text-red-800">{error}</div>
-          </div>
-        )}
-
+          
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
@@ -180,7 +182,8 @@ export const JobDetails = () => {
                   <div>
                     <p className="text-gray-600 text-sm font-medium">Client</p>
                     <p className="text-gray-900 mt-1">
-                      {job.clientId?.companyName}
+                      {/* ✅ FIX: clientId refs Client model which has companyName */}
+                      {job.clientId?.companyName || job.clientId?.userId?.name || "Unknown"}
                     </p>
                   </div>
                   <div>
@@ -204,6 +207,7 @@ export const JobDetails = () => {
                       Assigned Technician
                     </p>
                     <p className="text-gray-900 mt-1">
+                      {/* ✅ FIX: technicianId refs Technician model, access nested userId */}
                       {job.technicianId?.userId?.name || "Not assigned"}
                     </p>
                   </div>
@@ -298,7 +302,8 @@ export const JobDetails = () => {
                         <div>
                           <p className="text-gray-900">{note.text}</p>
                           <p className="text-sm text-gray-600 mt-2">
-                            By: {note.addedBy?.name || "Unknown"} at{" "}
+                            {/* ✅ FIX: note.addedBy is populated User, fallback to stored userName */}
+                            By: {note.addedBy?.name || note.userName || "Unknown"} at{" "}
                             {new Date(note.createdAt).toLocaleString()}
                           </p>
                         </div>
@@ -326,9 +331,13 @@ export const JobDetails = () => {
                 <p className="text-gray-600 font-medium">Priority</p>
                 <p className="mt-1 text-gray-900 capitalize">{job.priority}</p>
               </div>
+              {/* Client Contact */}
               <div>
                 <p className="text-gray-600 font-medium">Client Contact</p>
-                <p className="mt-1 text-gray-900">{job.clientId?.phone}</p>
+                {/* ✅ FIX: clientId refs Client model which has phone */}
+                <p className="mt-1 text-gray-900">
+                  {job.clientId?.phone || job.clientId?.userId?.email || "N/A"}
+                </p>
               </div>
               <div>
                 <p className="text-gray-600 font-medium">Total Notes</p>
@@ -343,8 +352,8 @@ export const JobDetails = () => {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

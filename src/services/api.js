@@ -17,13 +17,23 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Auth routes that should NEVER trigger the token refresh logic
+const AUTH_ROUTES = ["/auth/login", "/auth/register", "/auth/refresh-token", "/auth/logout"];
+
+const isAuthRoute = (url = "") =>
+  AUTH_ROUTES.some((route) => url.includes(route));
+
 // Handle token refresh on 401
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isAuthRoute(originalRequest.url)
+    ) {
       originalRequest._retry = true;
 
       try {
@@ -39,6 +49,7 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
+        // Only redirect if a valid session existed but expired
         localStorage.removeItem("accessToken");
         localStorage.removeItem("user");
         window.location.href = "/login";
@@ -46,6 +57,8 @@ apiClient.interceptors.response.use(
       }
     }
 
+    // For auth routes or already-retried requests, just reject with the error
+    // so the calling code (e.g. Login.jsx catch block) can handle it
     return Promise.reject(error);
   },
 );

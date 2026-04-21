@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { authAPI } from "../services/api";
+import { authAPI, userAPI } from "../services/api";
 
 const AuthContext = createContext();
 
@@ -47,6 +47,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("user", JSON.stringify(userData));
       setUser(userData);
 
+      // ✅ FIX: Return the full userData (which includes invitationToken for pending technicians)
+      // The backend puts invitationToken inside the user object for pending technicians
       return userData;
     } catch (err) {
       const message = err.response?.data?.message || "Login failed";
@@ -67,9 +69,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ✅ FIX: Added getCurrentUser so pages like UpdateProfile can refresh user state
+  const getCurrentUser = async () => {
+    try {
+      const response = await userAPI.getCurrentUser();
+      const freshUser = response.data.data;
+      localStorage.setItem("user", JSON.stringify(freshUser));
+      setUser(freshUser);
+      return freshUser;
+    } catch (err) {
+      console.error("getCurrentUser error:", err);
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, error, login, register, logout }}
+      value={{ user, loading, error, login, register, logout, getCurrentUser }}
     >
       {children}
     </AuthContext.Provider>

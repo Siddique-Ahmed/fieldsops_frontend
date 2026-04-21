@@ -37,19 +37,19 @@ export const Dashboard = () => {
           const response = await jobAPI.getAllJobs();
           jobsData = response.data.data;
         } else if (user?.role === "client") {
-          // Get client profile and fetch their jobs
+          // ✅ FIX: Get the Client profile ID from profileRef
           const response = await userAPI.getCurrentUser();
-          const clientId = response.data.data.profileRef?.client;
-          if (clientId) {
-            const jobsResponse = await jobAPI.getClientJobs(clientId);
+          const clientProfileId = response.data.data.profileRef?.client;
+          if (clientProfileId) {
+            const jobsResponse = await jobAPI.getClientJobs(clientProfileId);
             jobsData = jobsResponse.data.data;
           }
         } else if (user?.role === "technician") {
-          // Fetch technician's assigned jobs
+          // ✅ FIX: Get the Technician profile ID from profileRef
           const response = await userAPI.getCurrentUser();
-          const technicianId = response.data.data.profileRef?.technician;
-          if (technicianId) {
-            const jobsResponse = await jobAPI.getTechnicianJobs(technicianId);
+          const technicianProfileId = response.data.data.profileRef?.technician;
+          if (technicianProfileId) {
+            const jobsResponse = await jobAPI.getTechnicianJobs(technicianProfileId);
             jobsData = jobsResponse.data.data;
           }
         }

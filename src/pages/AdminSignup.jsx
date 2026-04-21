@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Mail, Lock, User, AlertCircle, ArrowRight } from "lucide-react";
+import { Mail, Lock, User, ArrowRight } from "lucide-react";
+import { toast } from "react-toastify";
 
 export default function AdminSignup() {
   const navigate = useNavigate();
   const { register } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -17,33 +17,28 @@ export default function AdminSignup() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    setError("");
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     // Validation
     if (!formData.name || !formData.email || !formData.password) {
-      setError("Please fill in all fields");
+      toast.warn("Please fill in all fields");
       setLoading(false);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      toast.error("Passwords do not match");
       setLoading(false);
       return;
     }
 
     if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
+      toast.warn("Password must be at least 6 characters");
       setLoading(false);
       return;
     }
@@ -54,11 +49,10 @@ export default function AdminSignup() {
         email: formData.email,
         password: formData.password,
       });
-
-      // Redirect to create company page
+      toast.success("Account created! Now set up your company.");
       navigate("/auth/create-company");
     } catch (err) {
-      setError(err.response?.data?.message || "Signup failed");
+      toast.error(err.response?.data?.message || "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -73,13 +67,6 @@ export default function AdminSignup() {
           </h1>
           <p className="text-gray-600">Step 1: Create your admin account</p>
         </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <div>{error}</div>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Full Name */}

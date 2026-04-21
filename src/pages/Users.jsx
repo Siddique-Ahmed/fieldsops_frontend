@@ -2,13 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { userAPI } from "../services/api";
 import DashboardLayout from "../components/DashboardLayout";
-import { Trash2, Edit2, AlertCircle, Users as UsersIcon } from "lucide-react";
+import { Trash2, Edit2, Users as UsersIcon } from "lucide-react";
+import { toast } from "react-toastify";
 
 export const Users = () => {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -17,7 +17,7 @@ export const Users = () => {
         const response = await userAPI.getAllUsers();
         setUsers(response.data.data || []);
       } catch (err) {
-        setError("Failed to fetch users");
+        toast.error("Failed to fetch users");
         console.error(err);
       } finally {
         setLoading(false);
@@ -32,8 +32,9 @@ export const Users = () => {
       try {
         await userAPI.deleteUser(userId);
         setUsers(users.filter((u) => u._id !== userId));
+        toast.success("User deactivated successfully");
       } catch (err) {
-        setError("Failed to delete user");
+        toast.error("Failed to deactivate user");
       }
     }
   };
@@ -66,14 +67,6 @@ export const Users = () => {
             Manage all system users and their roles
           </p>
         </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="text-red-800">{error}</div>
-          </div>
-        )}
 
         {/* Users Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Mail, Lock, AlertCircle } from "lucide-react";
+import { useDispatch } from "react-redux";
+import { setInvitationToken } from "../store/authSlice";
+import { Mail, Lock } from "lucide-react";
+import { toast } from "react-toastify";
 
 export const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
+  const [formData, setFormData] = useState({ email: "", password: "" });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -20,24 +20,30 @@ export const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
       const userData = await login(formData.email, formData.password);
+      toast.success("Login successful! Welcome back.");
 
-      // Check if user is pending (new technician)
-      if (userData.status === "pending") {
-        // Pass invitation token in URL if available
-        const tokenParam = userData.invitationToken
-          ? `?token=${userData.invitationToken}`
-          : "";
-        navigate(`/auth/update-profile${tokenParam}`);
+      // First-time technician login — pending status
+      if (userData.status === "pending" && userData.role === "technician") {
+        const token = userData.invitationToken;
+
+        if (token) {
+          // ✅ Save invitationToken to Redux store (not URL params)
+          dispatch(setInvitationToken(token));
+          toast.info("Please complete your profile to continue.");
+          navigate("/auth/update-profile");
+        } else {
+          toast.warn("Invitation token missing. Please contact your admin.");
+          navigate("/auth/update-profile");
+        }
       } else {
         navigate("/dashboard");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid credentials");
+      toast.error(err.response?.data?.message || "Invalid credentials");
     } finally {
       setLoading(false);
     }
@@ -53,22 +59,13 @@ export const Login = () => {
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-lg shadow-xl p-8">
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Login</h2>
 
-          {/* Error Alert */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="text-red-800 text-sm">{error}</div>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Mail className="w-4 h-4 inline mr-2" />
+                <Mail className="w-4 h-4 inline mr-1 text-gray-500" />
                 Email Address
               </label>
               <input
@@ -77,15 +74,14 @@ export const Login = () => {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="you@example.com"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition"
                 required
               />
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Lock className="w-4 h-4 inline mr-2" />
+                <Lock className="w-4 h-4 inline mr-1 text-gray-500" />
                 Password
               </label>
               <input
@@ -94,47 +90,39 @@ export const Login = () => {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition"
                 required
               />
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Logging in..." : "Login"}
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="my-6 relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">New here?</span>
-            </div>
+          <div className="my-6 flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-sm text-gray-400">New here?</span>
+            <div className="flex-1 h-px bg-gray-200" />
           </div>
 
-          {/* Admin Signup Link */}
           <button
             onClick={() => navigate("/auth/signup")}
-            className="w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-2 px-4 rounded-lg transition"
+            className="w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-3 px-4 rounded-xl transition"
           >
             Create Admin Account
           </button>
 
-          {/* Client Signup Info */}
-          <p className="text-center text-gray-600 text-sm mt-4">
-            Clients and technicians: You'll receive a signup link via email
+          <p className="text-center text-gray-500 text-sm mt-4">
+            Clients & technicians receive a signup link via email
           </p>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-gray-400 text-sm mt-6">
+        <p className="text-center text-gray-500 text-sm mt-6">
           Secure authentication with JWT tokens
         </p>
       </div>
